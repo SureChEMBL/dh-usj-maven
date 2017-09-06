@@ -23,3 +23,5 @@ artifacts:
 
   ...
 ```
+
+See [libjai-core-java-maven](https://github.com/SureChEMBL/libjai-core-java-maven) for example of a complete package.
