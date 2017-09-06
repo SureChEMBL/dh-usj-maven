@@ -1,0 +1,15 @@
+Source: dh-usj-maven
+Section: utils
+Priority: optional
+Maintainer: Yury Zavarin <yzavarin@ebi.ac.uk>
+Build-Depends:
+ debhelper (>= 9),
+
+Package: dh-usj-maven
+Architecture: all
+Depends:
+ ${misc:Depends},
+ python,
+ python-jinja2,
+ python-yaml,
+Description: debhelper to generate directory structure in local maven repo for raw jars

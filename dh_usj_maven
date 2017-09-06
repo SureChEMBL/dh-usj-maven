@@ -1,0 +1,125 @@
+#!/usr/bin/env python
+
+import errno
+import jinja2
+import os
+import yaml
+
+def read_cfg(cfg_path):
+    with open(cfg_path, 'r') as f:
+        return yaml.load(f)
+
+def mkdir_p(path):
+    try:
+        os.makedirs(path)
+    except OSError as exc:  # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise
+
+def tmpl2file(tmpl_path, dest_path, args):
+    tmpl_dir, tmpl_fname = os.path.split(tmpl_path)
+    j2_env = jinja2.Environment(
+        loader = jinja2.FileSystemLoader(tmpl_dir))
+    tmpl = j2_env.get_template(tmpl_fname)
+
+    rendered = tmpl.render(args)
+    open(dest_path, 'w').write(rendered)
+
+def group_id2dir(group_id):
+    return group_id.replace('.', '/')
+
+def artifact_version(artifact):
+    if 'version' in artifact:
+        return artifact['version']
+    else:
+        return 'debian'
+
+def artifact_maven_dir(artifact, maven_repo_dir):
+    return os.path.join(
+        maven_repo_dir,
+        group_id2dir(artifact['group_id']),
+        artifact['artifact_id'],
+        artifact_version(artifact))
+
+def pom_fname(artifact):
+    return '{0}-{1}.pom'.format(artifact['artifact_id'], artifact_version(artifact))
+
+def full_pom_path(artifact, maven_repo_dir):
+    return os.path.join(
+        artifact_maven_dir(artifact, maven_repo_dir),
+        pom_fname(artifact))
+
+def orig_jar_fname(artifact):
+    if 'jar' in artifact:
+        return artifact['jar']
+    else:
+        return '{0}.jar'.format(artifact['artifact_id'])
+
+def full_orig_jar_path(artifact, usj_dir):
+    return os.path.join(usj_dir, orig_jar_fname(artifact))
+
+def dest_jar_fname(artifact):
+    return '{0}-{1}.jar'.format(artifact['artifact_id'], artifact_version(artifact))
+
+def full_dest_jar_path(artifact, usj_dir, maven_repo_dir):
+    return os.path.join(artifact_maven_dir(artifact, maven_repo_dir),
+                        dest_jar_fname(artifact))
+
+def create_symlinks(artifacts, links_tmpl_path, links_out_path, usj_dir, maven_repo_dir):
+    symlinks = []
+    for artifact in artifacts:
+        args = {
+            'orig': full_orig_jar_path(artifact, usj_dir),
+            'dest': full_dest_jar_path(artifact, usj_dir, maven_repo_dir)
+        }
+        symlinks.append(args)
+
+    tmpl2file(
+        links_tmpl_path,
+        links_out_path,
+        { 'symlinks': symlinks })
+
+def create_pom(artifact, out_dir, usj_dir, maven_repo_dir, pom_tmpl_path):
+    dest_dir = os.path.join(out_dir, artifact_maven_dir(artifact, maven_repo_dir))
+    mkdir_p(dest_dir)
+
+    tmpl2file(pom_tmpl_path,
+              os.path.join(out_dir, full_pom_path(artifact, maven_repo_dir)),
+              artifact)
+
+
+def create_poms(artifacts, out_dir, usj_dir, maven_repo_dir, pom_tmpl_path):
+    for artifact in artifacts:
+        create_pom(artifact, out_dir, usj_dir, maven_repo_dir, pom_tmpl_path)
+
+def main():
+    debian_dir = 'debian'
+
+    cfg_path = os.path.join(debian_dir, 'usj_maven.yml')
+    poms_dir = os.path.join(debian_dir, 'dh_usj_maven_tmp')
+
+    share_dir = '/usr/share/dh-usj-maven'
+    pom_tmpl_path = os.path.join(share_dir, 'pom.xml.j2')
+    links_tmpl_path = os.path.join(share_dir, 'links.j2')
+
+    usj_dir = 'usr/share/java'
+    maven_repo_dir = 'usr/share/maven-repo'
+
+    links_path = os.path.join(debian_dir, 'links')
+
+    cfg = read_cfg(cfg_path)
+    package = cfg['package']
+    artifacts = cfg['artifacts']
+
+    debian_package_dir = os.path.join(debian_dir, package)
+
+    create_poms(artifacts, debian_package_dir, usj_dir, maven_repo_dir, pom_tmpl_path)
+
+    create_symlinks(artifacts, links_tmpl_path, links_path,
+                    os.path.join('/', usj_dir),
+                    os.path.join('/', maven_repo_dir))
+
+if __name__ == "__main__":
+    main()
